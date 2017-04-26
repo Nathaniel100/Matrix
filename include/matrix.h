@@ -5,30 +5,13 @@
 #ifndef MATRIX_MATRIX_H
 #define MATRIX_MATRIX_H
 
+#include "matrix_traits.h"
+
 #include <cstddef>
 #include <initializer_list>
 #include <vector>
 #include <array>
 namespace matrix {
-
-namespace details {
-
-template<class T, size_t N>
-class MatrixInit {
-public:
-  using type = std::initializer_list<typename MatrixInit<T, N - 1>::type>;
-};
-
-template<class T>
-class MatrixInit<T, 1> {
-public:
-  using type = std::initializer_list<T>;
-};
-
-template<class T>
-class MatrixInit<T, 0>;
-
-}
 
 template<size_t N>
 struct MatrixSlice {
@@ -40,9 +23,8 @@ struct MatrixSlice {
   template<typename... Dims>
   MatrixSlice(Dims... dims);
 
-  template<typename... Dims, typename = Enable_if<All(Convertible<Dims, size_t>()...)>>
-  size_t
-  operator()(Dims... dims) const;
+  template<typename... Dims, typename Enable = EnableIf<All(Convertible<Dims, size_t>()...)>>
+  size_t operator()(Dims... dims) const;
 
   size_t size;
   size_t start;
@@ -50,14 +32,10 @@ struct MatrixSlice {
   std::array<size_t, N> strides;
 };
 
-template<class T, size_t N>
+template<typename T, size_t N>
 class MatrixRef;
 
-
-template<class T, size_t N>
-using MatrixInitializer = typename details::MatrixInit<T, N>::type;
-
-template<class T, size_t N>
+template<typename T, size_t N>
 class Matrix {
 public:
   static constexpr size_t order = N;
@@ -72,20 +50,20 @@ public:
   Matrix &operator=(Matrix<T, N> &&m) = default;
   ~Matrix() = default;
 
-  template<class E>
+  template<typename E>
   Matrix(const MatrixRef<E, N> &other);
-  template<class E>
+  template<typename E>
   Matrix &operator=(const MatrixRef<E, N> &other);
 
   Matrix(MatrixInitializer<T, N> initializer);
   Matrix &operator=(MatrixInitializer<T, N> initializer);
 
-  template<class... Exts>
+  template<typename... Exts>
   Matrix(Exts... exts);
 
-  template<class E>
+  template<typename E>
   Matrix(std::initializer_list<E>) = delete;
-  template<class E>
+  template<typename E>
   Matrix &operator=(std::initializer_list<E>) = delete;
 
   size_t extent(size_t i) const {
@@ -108,10 +86,76 @@ public:
     return elems.data();
   }
 
+  iterator begin() {
+    return elems.begin();
+  }
+
+  const_iterator begin() const {
+    return elems.begin();
+  }
+
+  const_iterator cbegin() const {
+    return elems.cbegin();
+  }
+
+  iterator end() {
+    return elems.end();
+  }
+
+  const_iterator end() const {
+    return elems.end();
+  }
+
+  const_iterator cend() const {
+    return elems.cend();
+  }
+
+
+  MatrixRef<T, N - 1> operator[](size_t i) {
+    return row(i);
+  };
+  MatrixRef<const T, N - 1> operator[](size_t i) const {
+    return row(i);
+  };
+
+  MatrixRef<T, N - 1> row(size_t i);
+  MatrixRef<const T, N - 1> row(size_t i) const;
+
+  MatrixRef<T, N - 1> col(size_t i);
+  MatrixRef<const T, N - 1> col(size_t i) const;
+
+  template<typename... Args>
+  EnableIf<RequiringElement<Args...>(), T &> operator()(Args... args);
+  template<typename... Args>
+  EnableIf<RequiringElement<Args...>(), const T &> operator()(Args... args) const;
+  template<typename... Args>
+  EnableIf<RequiringSlice<Args...>(), MatrixRef<T, N> > operator()(const Args &... args);
+  template<typename... Args>
+  EnableIf<RequiringSlice<Args...>(), MatrixRef<const T, N> > operator()(const Args &... args) const;
+
+  template<typename F> Matrix &apply(F f);
+  template<typename M, typename F> Matrix &apply(const M &m, F f);
+
+  Matrix &operator=(const T &value);
+  Matrix &operator+=(const T &value);
+  Matrix &operator-=(const T &value);
+  Matrix &operator*=(const T &value);
+  Matrix &operator/=(const T &value);
+  Matrix &operator%=(const T &value);
+
+  template<typename M> Matrix &operator+=(const M &);
+  template<typename M> Matrix &operator-=(const M &);
+
 private:
   MatrixSlice<N> desc;
   std::vector<T> elems;
 };
+
+template<typename T, size_t N>
+Matrix<T, N> operator+(const Matrix<T, N> &a, const Matrix<T, N> &b);
+
+template<typename T1, typename T2, size_t N, typename RT = Matrix<CommonType<ValueType<T1>, ValueType<T2>>, N> >
+Matrix<RT, N> operator+(const Matrix<T1, N> &a, const Matrix<T2, N> &b);
 
 }
 
